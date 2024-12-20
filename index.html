@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Speech to Text with Roles</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+      text-align: center;
+    }
+    .chat-box {
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 10px;
+      height: 300px;
+      overflow-y: auto;
+      margin-bottom: 20px;
+      background-color: #f9f9f9;
+    }
+    .chat-message {
+      margin: 5px 0;
+      text-align: left;
+    }
+    .role {
+      font-weight: bold;
+    }
+    select, button {
+      margin: 10px;
+      padding: 10px;
+      font-size: 16px;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="roleSelection">
+    <h1>Pilih Peran Anda</h1>
+    <label for="role">Pilih Peran:</label>
+    <select id="role">
+      <option value="Hakim Ketua">Hakim Ketua</option>
+      <option value="Hakim Anggota 1">Hakim Anggota 1</option>
+      <option value="Hakim Anggota 2">Hakim Anggota 2</option>
+      <option value="Jaksa">Jaksa</option>
+      <option value="Terdakwa/Saksi">Terdakwa/Saksi</option>
+      <option value="Penasihat Hukum/Pengacara">Penasihat Hukum/Pengacara</option>
+    </select>
+    <button id="selectRoleBtn">Lanjutkan</button>
+  </div>
+
+  <div class="container hidden" id="chatSection">
+    <h1>Speech to Text with Roles</h1>
+    <div class="chat-box" id="chatBox"></div>
+
+    <button id="startBtn">Mulai Rekam</button>
+    <button id="stopBtn" disabled>Hentikan Rekam</button>
+  </div>
+
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <script>
+    const roleSelection = document.getElementById('roleSelection');
+    const chatSection = document.getElementById('chatSection');
+    const selectRoleBtn = document.getElementById('selectRoleBtn');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const chatBox = document.getElementById('chatBox');
+    const roleSelect = document.getElementById('role');
+
+    const socket = io("sipintar-pnjaksel.railway.internal"); // Connect to WebSocket server
+
+    let selectedRole = '';
+    let recognition;
+    let isRecording = false;
+
+    selectRoleBtn.addEventListener('click', () => {
+      selectedRole = roleSelect.value;
+      roleSelection.classList.add('hidden');
+      chatSection.classList.remove('hidden');
+    });
+
+    if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.lang = 'id-ID'; // Bahasa Indonesia
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        isRecording = true;
+        console.log('Speech recognition started');
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        const confidence = event.results[0][0].confidence;
+        console.log(`Transcript: ${transcript}, Confidence: ${confidence}`);
+        const message = { role: selectedRole, text: transcript };
+        socket.emit('chat message', message); // Send message to server
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+      };
+
+      recognition.onend = () => {
+        console.log('Speech recognition ended');
+        if (isRecording) {
+          recognition.start(); // Restart recognition automatically
+        }
+      };
+    } else {
+      alert('Browser Anda tidak mendukung Speech Recognition. Cobalah menggunakan Chrome.');
+    }
+
+    function displayMessage(role, message) {
+      const messageElement = document.createElement('div');
+      messageElement.className = 'chat-message';
+      messageElement.innerHTML = `<span class="role">${role}:</span> ${message}`;
+      chatBox.appendChild(messageElement);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    startBtn.addEventListener('click', () => {
+      if (recognition) {
+        isRecording = true;
+        recognition.start();
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+      }
+    });
+
+    stopBtn.addEventListener('click', () => {
+      if (recognition) {
+        isRecording = false;
+        recognition.stop();
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+      }
+    });
+
+    socket.on('chat message', (data) => {
+      displayMessage(data.role, data.text); // Display incoming message
+    });
+  </script>
+</body>
+</html>
